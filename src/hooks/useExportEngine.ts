@@ -1,0 +1,505 @@
+import { useCallback, useState } from 'react';
+import { useProjectStore } from '@/store/projectStore';
+import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+import WebMWriter from 'webm-writer';
+
+export interface ExportProgress {
+  phase: 'preparing' | 'rendering' | 'encoding' | 'finalizing' | 'complete';
+  progress: number; // 0-100
+  currentFrame?: number;
+  totalFrames?: number;
+  message?: string;
+}
+
+export interface ExportOptions {
+  format: 'png' | 'jpeg' | 'gif' | 'webm';
+  quality?: number; // 0-1 for JPEG, 0-10 for GIF
+  frameRate?: number; // fps for GIF/video
+  width?: number;
+  height?: number;
+  startTime?: number;
+  endTime?: number;
+}
+
+export const useExportEngine = () => {
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+
+  const {
+    canvasInstance,
+    duration,
+    currentTime,
+    keyframes,
+    tracks,
+    setCurrentTime,
+    setIsPlaying,
+  } = useProjectStore();
+
+  // Helper function to update canvas to a specific time
+  const updateCanvasToTime = useCallback(async (time: number): Promise<void> => {
+    if (!canvasInstance) return;
+
+    console.log('🎬 EXPORT: Updating canvas to time:', time.toFixed(3) + 's');
+    
+    const objects = canvasInstance.getObjects();
+    
+    // Create a map of object IDs to their corresponding clips for clip start time lookup
+    const objectToClipMap = new Map<string, { clip: any, track: any }>();
+    tracks.forEach(track => {
+      track.clips.forEach(clip => {
+        if (clip.canvasObjectId) {
+          objectToClipMap.set(clip.canvasObjectId, { clip, track });
+        }
+      });
+    });
+
+    // Group keyframes by object ID
+    const keyframesByObject: Record<string, typeof keyframes> = {};
+    keyframes.forEach(keyframe => {
+      if (!keyframesByObject[keyframe.objectId]) {
+        keyframesByObject[keyframe.objectId] = [];
+      }
+      keyframesByObject[keyframe.objectId].push(keyframe);
+    });
+
+    // Update each object based on its keyframes
+    objects.forEach(obj => {
+      const objectId = (obj as any).id;
+      if (!objectId) return;
+
+      const objectKeyframes = keyframesByObject[objectId];
+      if (!objectKeyframes || objectKeyframes.length === 0) return;
+
+      const clipInfo = objectToClipMap.get(objectId);
+      if (!clipInfo) return;
+
+      const { clip } = clipInfo;
+      const relativeTimeInClip = time - clip.startTime;
+
+      // Group keyframes by property
+      const keyframesByProperty: Record<string, typeof keyframes> = {};
+      objectKeyframes.forEach(keyframe => {
+        if (!keyframesByProperty[keyframe.property]) {
+          keyframesByProperty[keyframe.property] = [];
+        }
+        keyframesByProperty[keyframe.property].push(keyframe);
+      });
+
+      // Sort keyframes by relative time for each property
+      Object.keys(keyframesByProperty).forEach(property => {
+        keyframesByProperty[property].sort((a, b) => a.relativeTime - b.relativeTime);
+      });
+
+      // Interpolate each property
+      Object.keys(keyframesByProperty).forEach(property => {
+        const propertyKeyframes = keyframesByProperty[property];
+        
+        let prevKeyframe = null;
+        let nextKeyframe = null;
+
+        for (let i = 0; i < propertyKeyframes.length; i++) {
+          const keyframe = propertyKeyframes[i];
+          
+          if (keyframe.relativeTime <= relativeTimeInClip) {
+            prevKeyframe = keyframe;
+          }
+          
+          if (keyframe.relativeTime >= relativeTimeInClip && !nextKeyframe) {
+            nextKeyframe = keyframe;
+            break;
+          }
+        }
+
+        if (prevKeyframe || nextKeyframe) {
+          let interpolatedValue;
+
+          if (!prevKeyframe) {
+            interpolatedValue = nextKeyframe!.value;
+          } else if (!nextKeyframe) {
+            interpolatedValue = prevKeyframe.value;
+          } else if (prevKeyframe.relativeTime === nextKeyframe.relativeTime) {
+            interpolatedValue = nextKeyframe.value;
+          } else {
+            const timeDiff = nextKeyframe.relativeTime - prevKeyframe.relativeTime;
+            const timeProgress = (relativeTimeInClip - prevKeyframe.relativeTime) / timeDiff;
+            
+            // Simple linear interpolation
+            if (typeof prevKeyframe.value === 'number' && typeof nextKeyframe.value === 'number') {
+              interpolatedValue = prevKeyframe.value + (nextKeyframe.value - prevKeyframe.value) * timeProgress;
+            } else {
+              interpolatedValue = timeProgress < 0.5 ? prevKeyframe.value : nextKeyframe.value;
+            }
+          }
+
+          try {
+            (obj as any).set(property, interpolatedValue);
+          } catch (error) {
+            console.error('🎬 EXPORT: Error applying property', property, 'to object', objectId, ':', error);
+          }
+        }
+      });
+    });
+
+    // Update object visibility based on timeline position
+    tracks.forEach(track => {
+      const trackIsVisible = track.isVisible !== false;
+      
+      track.clips.forEach(clip => {
+        if (!clip.canvasObjectId) return;
+
+        const fabricObj = objects.find(obj => (obj as any).id === clip.canvasObjectId);
+        if (!fabricObj) return;
+
+        const clipStartTime = clip.startTime;
+        const clipEndTime = clip.startTime + clip.duration;
+        const shouldBeVisibleByTime = time >= clipStartTime && time <= clipEndTime;
+        const shouldBeVisible = shouldBeVisibleByTime && trackIsVisible;
+
+        fabricObj.set('visible', shouldBeVisible);
+      });
+    });
+
+    canvasInstance.renderAll();
+    
+    // Small delay to ensure rendering is complete
+    await new Promise(resolve => setTimeout(resolve, 16));
+  }, [canvasInstance, keyframes, tracks]);
+
+  // Export current frame as image
+  const exportImage = useCallback(async (options: ExportOptions = { format: 'png' }): Promise<void> => {
+    if (!canvasInstance) {
+      throw new Error('No canvas instance available');
+    }
+
+    console.log('📸 EXPORT: Starting image export with options:', options);
+    setIsExporting(true);
+    setExportProgress({
+      phase: 'preparing',
+      progress: 0,
+      message: 'Preparing image export...'
+    });
+
+    try {
+      // Update progress
+      setExportProgress({
+        phase: 'rendering',
+        progress: 50,
+        message: 'Rendering current frame...'
+      });
+
+      // Get the current canvas state as data URL
+      const quality = options.quality || (options.format === 'jpeg' ? 0.9 : 1.0);
+      const mimeType = options.format === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const dataURL = canvasInstance.toDataURL(mimeType, quality);
+
+      // Update progress
+      setExportProgress({
+        phase: 'finalizing',
+        progress: 90,
+        message: 'Finalizing export...'
+      });
+
+      // Create download
+      const link = document.createElement('a');
+      link.download = `frame-${currentTime.toFixed(2)}s.${options.format}`;
+      link.href = dataURL;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setExportProgress({
+        phase: 'complete',
+        progress: 100,
+        message: 'Image exported successfully!'
+      });
+
+      console.log('📸 EXPORT: Image export completed successfully');
+    } catch (error) {
+      console.error('📸 EXPORT: Image export failed:', error);
+      throw error;
+    } finally {
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportProgress(null);
+      }, 1000);
+    }
+  }, [canvasInstance, currentTime]);
+
+  // Export animation as GIF
+  const exportGIF = useCallback(async (options: ExportOptions = { format: 'gif', frameRate: 24 }): Promise<void> => {
+    if (!canvasInstance) {
+      throw new Error('No canvas instance available');
+    }
+
+    console.log('🎞️ EXPORT: Starting GIF export with options:', options);
+    setIsExporting(true);
+
+    const frameRate = options.frameRate || 24;
+    const startTime = options.startTime || 0;
+    const endTime = options.endTime || duration;
+    const exportDuration = endTime - startTime;
+    const totalFrames = Math.ceil(exportDuration * frameRate);
+    const frameInterval = 1 / frameRate;
+
+    console.log('🎞️ EXPORT: GIF parameters:', {
+      frameRate,
+      startTime,
+      endTime,
+      exportDuration,
+      totalFrames,
+      frameInterval
+    });
+
+    try {
+      setExportProgress({
+        phase: 'preparing',
+        progress: 0,
+        totalFrames,
+        message: 'Preparing GIF export...'
+      });
+
+      // Store original state
+      const originalTime = currentTime;
+      const originalPlaying = useProjectStore.getState().isPlaying;
+      setIsPlaying(false);
+
+      // Initialize GIF encoder
+      const gif = GIFEncoder();
+      const canvasWidth = canvasInstance.getWidth();
+      const canvasHeight = canvasInstance.getHeight();
+
+      setExportProgress({
+        phase: 'rendering',
+        progress: 5,
+        totalFrames,
+        currentFrame: 0,
+        message: 'Rendering frames...'
+      });
+
+      // Render each frame
+      for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
+        const frameTime = startTime + (frameIndex * frameInterval);
+        
+        console.log(`🎞️ EXPORT: Rendering frame ${frameIndex + 1}/${totalFrames} at time ${frameTime.toFixed(3)}s`);
+
+        // Update canvas to this frame's time
+        await updateCanvasToTime(frameTime);
+
+        // Get image data from canvas
+        const ctx = canvasInstance.getContext('2d');
+        const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+        
+        // Quantize colors for GIF (reduce to 256 colors)
+        const palette = quantize(imageData.data, 256);
+        const index = applyPalette(imageData.data, palette);
+
+        // Add frame to GIF
+        gif.writeFrame(index, canvasWidth, canvasHeight, {
+          palette,
+          delay: Math.round(1000 / frameRate), // delay in ms
+        });
+
+        // Update progress
+        const progress = 5 + ((frameIndex + 1) / totalFrames) * 80;
+        setExportProgress({
+          phase: 'rendering',
+          progress,
+          totalFrames,
+          currentFrame: frameIndex + 1,
+          message: `Rendering frame ${frameIndex + 1}/${totalFrames}...`
+        });
+      }
+
+      setExportProgress({
+        phase: 'encoding',
+        progress: 85,
+        totalFrames,
+        message: 'Encoding GIF...'
+      });
+
+      // Finalize GIF
+      gif.finish();
+      const buffer = gif.bytes();
+
+      setExportProgress({
+        phase: 'finalizing',
+        progress: 95,
+        totalFrames,
+        message: 'Finalizing GIF...'
+      });
+
+      // Create download
+      const blob = new Blob([buffer], { type: 'image/gif' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `animation-${startTime.toFixed(1)}s-${endTime.toFixed(1)}s.gif`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // Restore original state
+      setCurrentTime(originalTime);
+      setIsPlaying(originalPlaying);
+
+      setExportProgress({
+        phase: 'complete',
+        progress: 100,
+        totalFrames,
+        message: 'GIF exported successfully!'
+      });
+
+      console.log('🎞️ EXPORT: GIF export completed successfully');
+    } catch (error) {
+      console.error('🎞️ EXPORT: GIF export failed:', error);
+      throw error;
+    } finally {
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportProgress(null);
+      }, 1000);
+    }
+  }, [canvasInstance, duration, currentTime, updateCanvasToTime, setCurrentTime, setIsPlaying]);
+
+  // Export animation as WebM video
+  const exportVideo = useCallback(async (options: ExportOptions = { format: 'webm', frameRate: 30 }): Promise<void> => {
+    if (!canvasInstance) {
+      throw new Error('No canvas instance available');
+    }
+
+    console.log('🎬 EXPORT: Starting video export with options:', options);
+    setIsExporting(true);
+
+    const frameRate = options.frameRate || 30;
+    const startTime = options.startTime || 0;
+    const endTime = options.endTime || duration;
+    const exportDuration = endTime - startTime;
+    const totalFrames = Math.ceil(exportDuration * frameRate);
+    const frameInterval = 1 / frameRate;
+
+    console.log('🎬 EXPORT: Video parameters:', {
+      frameRate,
+      startTime,
+      endTime,
+      exportDuration,
+      totalFrames,
+      frameInterval
+    });
+
+    try {
+      setExportProgress({
+        phase: 'preparing',
+        progress: 0,
+        totalFrames,
+        message: 'Preparing video export...'
+      });
+
+      // Store original state
+      const originalTime = currentTime;
+      const originalPlaying = useProjectStore.getState().isPlaying;
+      setIsPlaying(false);
+
+      // Initialize WebM writer
+      const videoWriter = new WebMWriter({
+        quality: options.quality || 0.95,
+        frameRate: frameRate,
+        transparent: false,
+      });
+
+      setExportProgress({
+        phase: 'rendering',
+        progress: 5,
+        totalFrames,
+        currentFrame: 0,
+        message: 'Rendering frames...'
+      });
+
+      // Render each frame
+      for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
+        const frameTime = startTime + (frameIndex * frameInterval);
+        
+        console.log(`🎬 EXPORT: Rendering frame ${frameIndex + 1}/${totalFrames} at time ${frameTime.toFixed(3)}s`);
+
+        // Update canvas to this frame's time
+        await updateCanvasToTime(frameTime);
+
+        // Get canvas as blob
+        const blob = await new Promise<Blob>((resolve) => {
+          canvasInstance.toBlob((blob) => {
+            resolve(blob!);
+          }, 'image/webp', 0.95);
+        });
+
+        // Add frame to video
+        videoWriter.addFrame(blob);
+
+        // Update progress
+        const progress = 5 + ((frameIndex + 1) / totalFrames) * 80;
+        setExportProgress({
+          phase: 'rendering',
+          progress,
+          totalFrames,
+          currentFrame: frameIndex + 1,
+          message: `Rendering frame ${frameIndex + 1}/${totalFrames}...`
+        });
+      }
+
+      setExportProgress({
+        phase: 'encoding',
+        progress: 85,
+        totalFrames,
+        message: 'Encoding video...'
+      });
+
+      // Finalize video
+      const videoBlob = await videoWriter.complete();
+
+      setExportProgress({
+        phase: 'finalizing',
+        progress: 95,
+        totalFrames,
+        message: 'Finalizing video...'
+      });
+
+      // Create download
+      const url = URL.createObjectURL(videoBlob);
+      const link = document.createElement('a');
+      link.download = `animation-${startTime.toFixed(1)}s-${endTime.toFixed(1)}s.webm`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // Restore original state
+      setCurrentTime(originalTime);
+      setIsPlaying(originalPlaying);
+
+      setExportProgress({
+        phase: 'complete',
+        progress: 100,
+        totalFrames,
+        message: 'Video exported successfully!'
+      });
+
+      console.log('🎬 EXPORT: Video export completed successfully');
+    } catch (error) {
+      console.error('🎬 EXPORT: Video export failed:', error);
+      throw error;
+    } finally {
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportProgress(null);
+      }, 1000);
+    }
+  }, [canvasInstance, duration, currentTime, updateCanvasToTime, setCurrentTime, setIsPlaying]);
+
+  return {
+    isExporting,
+    exportProgress,
+    exportImage,
+    exportGIF,
+    exportVideo,
+  };
+};
