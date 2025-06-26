@@ -188,9 +188,12 @@ export const useExportEngine = () => {
       });
 
       // Get the current canvas state as data URL
-      const quality = options.quality || (options.format === 'jpeg' ? 0.9 : 1.0);
       const mimeType = options.format === 'jpeg' ? 'image/jpeg' : 'image/png';
-      const dataURL = canvasInstance.toDataURL(mimeType, quality);
+      const dataURL = canvasInstance.toDataURL({
+        format: options.format === 'jpeg' ? 'jpeg' : 'png',
+        quality: options.quality || (options.format === 'jpeg' ? 0.9 : 1.0),
+        multiplier: 1
+      });
 
       // Update progress
       setExportProgress({
@@ -276,6 +279,12 @@ export const useExportEngine = () => {
         message: 'Rendering frames...'
       });
 
+      // Create a temporary canvas to extract image data
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvasWidth;
+      tempCanvas.height = canvasHeight;
+      const tempCtx = tempCanvas.getContext('2d')!;
+
       // Render each frame
       for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
         const frameTime = startTime + (frameIndex * frameInterval);
@@ -285,13 +294,25 @@ export const useExportEngine = () => {
         // Update canvas to this frame's time
         await updateCanvasToTime(frameTime);
 
-        // Get image data from canvas
-        const ctx = canvasInstance.getContext('2d');
-        const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+        // Get the Fabric.js canvas as data URL and draw it to temp canvas
+        const dataURL = canvasInstance.toDataURL({ format: 'png', multiplier: 1 });
+        const img = new Image();
+        
+        await new Promise<void>((resolve) => {
+          img.onload = () => {
+            tempCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+            tempCtx.drawImage(img, 0, 0);
+            resolve();
+          };
+          img.src = dataURL;
+        });
+
+        // Get image data from temp canvas
+        const imageData = tempCtx.getImageData(0, 0, canvasWidth, canvasHeight);
         
         // Quantize colors for GIF (reduce to 256 colors)
-        const palette = quantize(imageData.data, 256);
-        const index = applyPalette(imageData.data, palette);
+        const palette = quantize(new Uint8Array(imageData.data), 256);
+        const index = applyPalette(new Uint8Array(imageData.data), palette);
 
         // Add frame to GIF
         gif.writeFrame(index, canvasWidth, canvasHeight, {
@@ -400,7 +421,13 @@ export const useExportEngine = () => {
       const originalPlaying = useProjectStore.getState().isPlaying;
       setIsPlaying(false);
 
-      // Initialize WebM writer
+      // Create a temporary canvas to capture frames
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvasInstance.getWidth();
+      tempCanvas.height = canvasInstance.getHeight();
+      const tempCtx = tempCanvas.getContext('2d')!;
+
+      // Initialize WebM writer with the temporary canvas
       const videoWriter = new WebMWriter({
         quality: options.quality || 0.95,
         frameRate: frameRate,
@@ -424,15 +451,21 @@ export const useExportEngine = () => {
         // Update canvas to this frame's time
         await updateCanvasToTime(frameTime);
 
-        // Get canvas as blob
-        const blob = await new Promise<Blob>((resolve) => {
-          canvasInstance.toBlob((blob) => {
-            resolve(blob!);
-          }, 'image/webp', 0.95);
+        // Get the Fabric.js canvas as data URL and draw it to temp canvas
+        const dataURL = canvasInstance.toDataURL({ format: 'png', multiplier: 1 });
+        const img = new Image();
+        
+        await new Promise<void>((resolve) => {
+          img.onload = () => {
+            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.drawImage(img, 0, 0);
+            resolve();
+          };
+          img.src = dataURL;
         });
 
-        // Add frame to video
-        videoWriter.addFrame(blob);
+        // Add the temporary canvas as a frame to the video
+        videoWriter.addFrame(tempCanvas);
 
         // Update progress
         const progress = 5 + ((frameIndex + 1) / totalFrames) * 80;
