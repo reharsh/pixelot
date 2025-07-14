@@ -1,17 +1,16 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as fabric from 'fabric';
-import { Trash2, RotateCcw, ZoomIn, ZoomOut, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProjectStore } from '@/store/projectStore';
 import { createUUID } from '@/lib/uuid';
 import { useCanvasZIndexSync } from '@/hooks/useCanvasZIndexSync';
 import { useTimelineSync } from '@/hooks/useTimelineSync';
+import { Heart, ZoomIn, ZoomOut, Trash2 } from 'lucide-react';
 
 const PreviewCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedObject, setSelectedObject] = useState<fabric.Object | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 1920, height: 1080 });
 
   // Get state and actions from the store
@@ -24,12 +23,9 @@ const PreviewCanvas: React.FC = () => {
     tracks,
     isPlaying, // NEW: Get isPlaying state
     saveCanvasState,
-    undo,
-    redo,
     setZoomLevel,
     setCanvasInstance,
     addObject,
-    updateObject,
     removeObject,
     setSelectedClipId,
     deleteSelectedAsset, // NEW: Use the comprehensive delete action
@@ -166,7 +162,6 @@ const PreviewCanvas: React.FC = () => {
     // Add event listeners with detailed logging and store synchronization
     canvas.on('selection:created', (e) => {
       const selectedObj = e.selected?.[0];
-      setSelectedObject(selectedObj || null);
       
       console.log('🎯 SELECTION: Object selected');
       console.log('📋 SELECTION: Selected object details:', selectedObj?.toJSON());
@@ -179,7 +174,7 @@ const PreviewCanvas: React.FC = () => {
           
           // Find the corresponding timeline clip
           const currentTracks = useProjectStore.getState().tracks;
-          let foundClip = null;
+          let foundClip: any = null;
           
           for (const track of currentTracks) {
             for (const clip of track.clips) {
@@ -203,7 +198,6 @@ const PreviewCanvas: React.FC = () => {
 
     canvas.on('selection:updated', (e) => {
       const selectedObj = e.selected?.[0];
-      setSelectedObject(selectedObj || null);
       
       console.log('🔄 SELECTION: Selection updated');
       console.log('📋 SELECTION: Updated selected object details:', selectedObj?.toJSON());
@@ -216,7 +210,7 @@ const PreviewCanvas: React.FC = () => {
           
           // Find the corresponding timeline clip
           const currentTracks = useProjectStore.getState().tracks;
-          let foundClip = null;
+          let foundClip: any = null;
           
           for (const track of currentTracks) {
             for (const clip of track.clips) {
@@ -239,7 +233,7 @@ const PreviewCanvas: React.FC = () => {
     });
 
     canvas.on('selection:cleared', () => {
-      setSelectedObject(null);
+      
       console.log('❌ SELECTION: Selection cleared');
       
       // Clear timeline selection as well
@@ -489,7 +483,7 @@ const PreviewCanvas: React.FC = () => {
     
     if (selectedClipId) {
       // Find the corresponding timeline clip
-      let foundClip = null;
+      let foundClip: any = null;
       for (const track of tracks) {
         for (const clip of track.clips) {
           if (clip.id === selectedClipId) {
@@ -513,7 +507,6 @@ const PreviewCanvas: React.FC = () => {
           fabricCanvasRef.current.discardActiveObject();
           fabricCanvasRef.current.setActiveObject(fabricObj);
           fabricCanvasRef.current.renderAll();
-          setSelectedObject(fabricObj);
         } else {
           console.log('🔄 SYNC: Canvas object not found for clip:', foundClip.canvasObjectId);
         }
@@ -523,7 +516,6 @@ const PreviewCanvas: React.FC = () => {
       console.log('🔄 SYNC: Clearing canvas selection');
       fabricCanvasRef.current.discardActiveObject();
       fabricCanvasRef.current.renderAll();
-      setSelectedObject(null);
     }
   }, [selectedClipId, tracks]);
 
@@ -589,83 +581,6 @@ const PreviewCanvas: React.FC = () => {
       resizeObserver.disconnect();
     };
   }, [calculateCanvasSize, canvasSize.width, canvasSize.height]);
-
-  const clearCanvas = () => {
-    if (!fabricCanvasRef.current) return;
-
-    console.log('🧹 CLEAR: Clearing entire canvas');
-    console.log('📊 CLEAR: Objects before clear:', fabricCanvasRef.current.getObjects().length);
-
-    fabricCanvasRef.current.clear();
-    fabricCanvasRef.current.backgroundColor = '#000000';
-    fabricCanvasRef.current.renderAll();
-    setSelectedObject(null);
-    
-    const canvasState = JSON.stringify(fabricCanvasRef.current.toJSON());
-    console.log('💾 CLEAR: Saving canvas state after clear');
-    console.log('📊 CLEAR: Canvas is now empty');
-    saveCanvasState(canvasState);
-  };
-
-  const handleUndo = () => {
-    if (!fabricCanvasRef.current) return;
-
-    console.log('↩️ UNDO: Performing undo operation');
-    console.log('📊 UNDO: Current history index:', historyIndex);
-    console.log('📊 UNDO: History length:', canvasHistory.length);
-
-    if (historyIndex <= 0) {
-      console.log('❌ UNDO: Cannot undo, already at beginning');
-      return;
-    }
-
-    // Call the store's undo action
-    undo();
-    
-    // Get the updated state from the store after undo
-    const { canvasHistory: updatedCanvasHistory, historyIndex: updatedHistoryIndex } = useProjectStore.getState();
-    const canvasState = updatedCanvasHistory[updatedHistoryIndex];
-    
-    console.log('📊 UNDO: Loading state from history index:', updatedHistoryIndex);
-    console.log('📊 UNDO: Canvas state to load:', canvasState);
-    
-    fabricCanvasRef.current.loadFromJSON(canvasState, () => {
-      fabricCanvasRef.current?.renderAll();
-      setSelectedObject(null);
-      console.log('✅ UNDO: Undo operation completed');
-      console.log('📊 UNDO: Objects on canvas after undo:', fabricCanvasRef.current?.getObjects().length);
-    });
-  };
-
-  const handleRedo = () => {
-    if (!fabricCanvasRef.current) return;
-
-    console.log('↪️ REDO: Performing redo operation');
-    console.log('📊 REDO: Current history index:', historyIndex);
-    console.log('📊 REDO: History length:', canvasHistory.length);
-
-    if (historyIndex >= canvasHistory.length - 1) {
-      console.log('❌ REDO: Cannot redo, already at end');
-      return;
-    }
-
-    // Call the store's redo action
-    redo();
-    
-    // Get the updated state from the store after redo
-    const { canvasHistory: updatedCanvasHistory, historyIndex: updatedHistoryIndex } = useProjectStore.getState();
-    const canvasState = updatedCanvasHistory[updatedHistoryIndex];
-    
-    console.log('📊 REDO: Loading state from history index:', updatedHistoryIndex);
-    console.log('📊 REDO: Canvas state to load:', canvasState);
-    
-    fabricCanvasRef.current.loadFromJSON(canvasState, () => {
-      fabricCanvasRef.current?.renderAll();
-      setSelectedObject(null);
-      console.log('✅ REDO: Redo operation completed');
-      console.log('📊 REDO: Objects on canvas after redo:', fabricCanvasRef.current?.getObjects().length);
-    });
-  };
 
   const zoomIn = () => {
     if (!fabricCanvasRef.current) return;

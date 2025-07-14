@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useProjectStore } from '@/store/projectStore';
+import * as fabric from 'fabric';
 
 /**
  * Hook to synchronize timeline clips with canvas object visibility

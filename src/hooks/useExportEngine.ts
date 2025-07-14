@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useProjectStore } from '@/store/projectStore';
+// @ts-expect-error: no types for gifenc
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+// @ts-expect-error: no types for webm-writer
 import WebMWriter from 'webm-writer';
 
 export interface ExportProgress {
@@ -224,7 +226,6 @@ export const useExportEngine = () => {
       });
 
       // Get the current canvas state as data URL
-      const mimeType = options.format === 'jpeg' ? 'image/jpeg' : 'image/png';
       const dataURL = canvasInstance.toDataURL({
         format: options.format === 'jpeg' ? 'jpeg' : 'png',
         quality: options.quality || (options.format === 'jpeg' ? 0.9 : 1.0),

@@ -212,7 +212,7 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // Get actions from the store
-  const { setAssets, addShapeToCanvas, addTextToCanvas } = useProjectStore();
+  const { setAssets } = useProjectStore();
 
   const filteredAssets = assets.filter(asset =>
     asset.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -302,21 +302,6 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({
     { id: 'body', name: 'Body Text', fontSize: 24, fontWeight: 'normal', sample: 'Body text content' },
     { id: 'caption', name: 'Caption', fontSize: 18, fontWeight: 'normal', sample: 'Caption text' },
   ];
-
-  const handleShapeClick = (shapeType: string, color: string) => {
-    console.log('🎨 ASSETS: Adding shape via store action:', shapeType);
-    addShapeToCanvas(shapeType, { fill: color });
-  };
-
-  const handleTextStyleClick = (style: any) => {
-    console.log('📝 ASSETS: Adding text via store action:', style);
-    addTextToCanvas({
-      text: style.sample,
-      fontSize: style.fontSize,
-      fontWeight: style.fontWeight,
-      fill: '#ffffff'
-    });
-  };
 
   const renderAssetGrid = (assetsToRender: MediaAsset[]) => (
     <div className={viewMode === 'grid' ? 'grid gap-3' : 'space-y-2'} style={{

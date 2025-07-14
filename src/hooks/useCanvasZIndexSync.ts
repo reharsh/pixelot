@@ -65,8 +65,8 @@ export const useCanvasZIndexSync = () => {
           console.log('🎨 Z-INDEX SYNC: Moving object', objectId, 'from index', currentIndex, 'to', desiredZIndex);
           
           // Verify the object has the moveTo method before calling it
-          if (typeof obj.moveTo === 'function') {
-            obj.moveTo(desiredZIndex);
+          if (typeof (obj as any).moveTo === 'function') {
+            (obj as any).moveTo(desiredZIndex);
             changesApplied++;
           } else {
             console.warn('🎨 Z-INDEX SYNC: Object', objectId, 'does not have moveTo method, type:', obj.type);

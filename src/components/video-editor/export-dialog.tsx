@@ -8,13 +8,12 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   Download, 
@@ -50,7 +49,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({ children }) => {
   const handleExport = async () => {
     try {
       const options: ExportOptions = {
-        format: exportType === 'image' ? imageFormat : exportType,
+        format: exportType === 'image' ? imageFormat : (exportType === 'video' ? 'webm' : exportType),
         quality: quality[0] / 100,
         frameRate: frameRate[0],
         startTime: useTimeRange ? startTime[0] : 0,

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef } from 'react';
 import { 
   DndContext, 
   DragEndEvent,
@@ -25,15 +25,13 @@ import PreviewCanvas from '@/components/video-editor/preview-canvas';
 import Timeline, { TimelineRef } from '@/components/video-editor/timeline';
 import PlaybackControls from '@/components/video-editor/playback-controls';
 import PropertyPanel from '@/components/video-editor/property-panel'; // NEW: Import PropertyPanel
-import ExportDialog from '@/components/video-editor/export-dialog';
-import { Button } from '@/components/ui/button'; // If not already imported
 
 interface VideoEditorProps {
   onExport?: () => void;
   onSave?: () => void;
 }
 
-const VideoEditor: React.FC<VideoEditorProps> = ({ onExport, onSave }) => {
+const VideoEditor: React.FC<VideoEditorProps> = () => {
   const timelineRef = useRef<TimelineRef>(null);
   
   // Get state from the global store
@@ -126,7 +124,6 @@ const VideoEditor: React.FC<VideoEditorProps> = ({ onExport, onSave }) => {
                     currentTime={currentTime}
                     duration={duration}
                     timelineZoom={timelineZoom}
-                    assets={assets}
                     onTimelineClick={handleTimelineClick}
                     onTimelineZoomChange={handleTimelineZoomChange}
                   />

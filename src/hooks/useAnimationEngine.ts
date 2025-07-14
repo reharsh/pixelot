@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useProjectStore } from '@/store/projectStore';
-import * as fabric from 'fabric';
 
 // Animation interpolation utilities
 const lerp = (start: number, end: number, t: number): number => {

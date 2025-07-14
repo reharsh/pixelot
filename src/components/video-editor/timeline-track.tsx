@@ -2,20 +2,17 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Eye, EyeOff, Volume2, VolumeX, Lock, Unlock, Zap, ZapOff, Diamond, Trash2 } from 'lucide-react';
+import { GripVertical, Eye, EyeOff, Volume2, VolumeX, Lock, Unlock, Zap, ZapOff, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Track, TimelineClip } from '@/types/video-editor';
 import { useProjectStore, Keyframe } from '@/store/projectStore';
 
 interface TimelineTrackProps {
   track: Track;
-  trackIndex: number;
   duration: number;
   scaledTimelineWidth: number;
   selectedClip: string | null;
   onClipSelect: (clipId: string | null) => void;
-  onClipRemove: (trackId: string, clipId: string) => void;
-  onClipUpdate: (trackId: string, clipId: string, updates: Partial<TimelineClip>) => void;
   type: 'label' | 'content';
   // Keyframe-related props
   keyframes?: Keyframe[];
@@ -274,13 +271,10 @@ const DraggableClip: React.FC<{
 
 const TimelineTrack: React.FC<TimelineTrackProps> = ({
   track,
-  trackIndex,
   duration,
   scaledTimelineWidth,
   selectedClip,
   onClipSelect,
-  onClipRemove,
-  onClipUpdate,
   type,
   // Keyframe-related props
   keyframes = [],

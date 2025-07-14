@@ -17,7 +17,7 @@ export interface CanvasObject {
   flipX: boolean;
   flipY: boolean;
   // Style
-  fill: string | fabric.Pattern | fabric.Gradient;
+  fill: string | fabric.Pattern | fabric.Gradient<any>;
   stroke: string;
   strokeWidth: number;
   opacity: number;
@@ -635,7 +635,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       commonProperties.push(
         { name: 'text', value: textObj.text || '' },
         { name: 'fontSize', value: textObj.fontSize || 20 },
-        { name: 'fontWeight', value: textObj.fontWeight || 'normal' },
+        { name: 'fontWeight', value: String(textObj.fontWeight || 'normal') },
         { name: 'fontFamily', value: textObj.fontFamily || 'Arial' }
       );
     }
@@ -861,7 +861,7 @@ img.onload = function() {
   });
 
   // Assign unique ID for animation engine
-  fabricImg.id = imageId;
+  (fabricImg as any).id = imageId;
   console.log('🖼️ IMAGE LOADING: Assigned unique ID to image:', imageId);
 
   console.log('🖼️ IMAGE LOADING: Image object created:', fabricImg.toJSON());

@@ -8,15 +8,11 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { 
-  Scissors,
-  Copy,
-  Plus,
   ZoomIn
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
-import { MediaAsset, Track, TimelineClip } from '@/types/video-editor';
+import { Track, TimelineClip } from '@/types/video-editor';
 import { useProjectStore } from '@/store/projectStore';
 import { createUUID } from '@/lib/uuid';
 import TimelineTrack from './timeline-track';
@@ -25,7 +21,6 @@ interface TimelineProps {
   currentTime: number;
   duration: number;
   timelineZoom: number[];
-  assets: MediaAsset[];
   onTimelineZoomChange: (zoom: number[]) => void;
   onTimelineClick: (time: number) => void;
 }
@@ -38,7 +33,6 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
   currentTime,
   duration,
   timelineZoom,
-  assets,
   onTimelineZoomChange,
   onTimelineClick,
 }, ref) => {
@@ -58,8 +52,6 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
     selectedKeyframeId, // NEW: Get selected keyframe
     setSelectedKeyframeId, // NEW: Set selected keyframe
     addTrack,
-    removeTrack,
-    removeClipFromTrack,
     setSelectedClipId,
     setDuration,
     addShapeToCanvas,
@@ -425,17 +417,14 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
                 items={tracks.map(track => track.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {tracks.map((track, index) => (
+                {tracks.map((track) => (
                   <TimelineTrack
                     key={`${track.id}-label`}
                     track={track}
-                    trackIndex={index}
                     duration={duration}
                     scaledTimelineWidth={scaledTimelineWidth}
                     selectedClip={selectedClipId}
                     onClipSelect={setSelectedClipId}
-                    onClipRemove={removeClipFromTrack}
-                    onClipUpdate={updateClip}
                     type="label"
                     // NEW: Pass keyframe-related props
                     keyframes={keyframes}
@@ -523,17 +512,14 @@ const Timeline = forwardRef<TimelineRef, TimelineProps>(({
                     items={tracks.map(track => track.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {tracks.map((track, index) => (
+                    {tracks.map((track) => (
                       <TimelineTrack
                         key={`${track.id}-content`}
                         track={track}
-                        trackIndex={index}
                         duration={duration}
                         scaledTimelineWidth={scaledTimelineWidth}
                         selectedClip={selectedClipId}
                         onClipSelect={setSelectedClipId}
-                        onClipRemove={removeClipFromTrack}
-                        onClipUpdate={updateClip}
                         type="content"
                         // NEW: Pass keyframe-related props
                         keyframes={keyframes}
