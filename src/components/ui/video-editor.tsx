@@ -142,16 +142,6 @@ const VideoEditor: React.FC<VideoEditorProps> = ({ onExport, onSave }) => {
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
-
-        {/* Playback Controls */}
-        {/* Playback Controls */}
-        <div className="flex items-center justify-end p-4">
-          <ExportDialog>
-            <Button variant="primary" className="text-white">
-              Export
-            </Button>
-          </ExportDialog>
-        </div>
         <PlaybackControls />
 
         {/* Drag Overlay */}

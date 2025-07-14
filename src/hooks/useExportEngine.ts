@@ -21,6 +21,40 @@ export interface ExportOptions {
   endTime?: number;
 }
 
+// Animation interpolation utilities (copied from useAnimationEngine.ts)
+const lerp = (start: number, end: number, t: number): number => {
+  return start + (end - start) * t;
+};
+
+const lerpColor = (startColor: string, endColor: string, t: number): string => {
+  if (startColor.startsWith('#') && endColor.startsWith('#')) {
+    const start = parseInt(startColor.slice(1), 16);
+    const end = parseInt(endColor.slice(1), 16);
+    const startR = (start >> 16) & 255;
+    const startG = (start >> 8) & 255;
+    const startB = start & 255;
+    const endR = (end >> 16) & 255;
+    const endG = (end >> 8) & 255;
+    const endB = end & 255;
+    const r = Math.round(lerp(startR, endR, t));
+    const g = Math.round(lerp(startG, endG, t));
+    const b = Math.round(lerp(startB, endB, t));
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  }
+  return t < 0.5 ? startColor : endColor;
+};
+
+// Easing functions (copied from useAnimationEngine.ts)
+const easingFunctions = {
+  linear: (t: number) => t,
+  easeInQuad: (t: number) => t * t,
+  easeOutQuad: (t: number) => t * (2 - t),
+  easeInOutQuad: (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+  easeInCubic: (t: number) => t * t * t,
+  easeOutCubic: (t: number) => (--t) * t * t + 1,
+  easeInOutCubic: (t: number) => t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1,
+};
+
 export const useExportEngine = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
@@ -93,26 +127,20 @@ export const useExportEngine = () => {
       // Interpolate each property
       Object.keys(keyframesByProperty).forEach(property => {
         const propertyKeyframes = keyframesByProperty[property];
-        
         let prevKeyframe = null;
         let nextKeyframe = null;
-
         for (let i = 0; i < propertyKeyframes.length; i++) {
           const keyframe = propertyKeyframes[i];
-          
           if (keyframe.relativeTime <= relativeTimeInClip) {
             prevKeyframe = keyframe;
           }
-          
           if (keyframe.relativeTime >= relativeTimeInClip && !nextKeyframe) {
             nextKeyframe = keyframe;
             break;
           }
         }
-
         if (prevKeyframe || nextKeyframe) {
           let interpolatedValue;
-
           if (!prevKeyframe) {
             interpolatedValue = nextKeyframe!.value;
           } else if (!nextKeyframe) {
@@ -122,15 +150,23 @@ export const useExportEngine = () => {
           } else {
             const timeDiff = nextKeyframe.relativeTime - prevKeyframe.relativeTime;
             const timeProgress = (relativeTimeInClip - prevKeyframe.relativeTime) / timeDiff;
-            
-            // Simple linear interpolation
+            // Apply easing
+            const easing = nextKeyframe.easing || 'linear';
+            const easingFunction = easingFunctions[easing as keyof typeof easingFunctions] || easingFunctions.linear;
+            const easedProgress = easingFunction(timeProgress);
+            // Interpolate based on value type
             if (typeof prevKeyframe.value === 'number' && typeof nextKeyframe.value === 'number') {
-              interpolatedValue = prevKeyframe.value + (nextKeyframe.value - prevKeyframe.value) * timeProgress;
+              interpolatedValue = lerp(prevKeyframe.value, nextKeyframe.value, easedProgress);
+            } else if (typeof prevKeyframe.value === 'string' && typeof nextKeyframe.value === 'string') {
+              if (prevKeyframe.value.startsWith('#') && nextKeyframe.value.startsWith('#')) {
+                interpolatedValue = lerpColor(prevKeyframe.value, nextKeyframe.value, easedProgress);
+              } else {
+                interpolatedValue = easedProgress < 0.5 ? prevKeyframe.value : nextKeyframe.value;
+              }
             } else {
-              interpolatedValue = timeProgress < 0.5 ? prevKeyframe.value : nextKeyframe.value;
+              interpolatedValue = easedProgress < 0.5 ? prevKeyframe.value : nextKeyframe.value;
             }
           }
-
           try {
             (obj as any).set(property, interpolatedValue);
           } catch (error) {

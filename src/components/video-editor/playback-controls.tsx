@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 import { useProjectStore } from '@/store/projectStore';
+import ExportDialog from './export-dialog';
 
 // Helper function to format time in MM:SS:ms format
 function formatTime(seconds: number): string {
@@ -123,6 +124,12 @@ const PlaybackControls: React.FC = () => {
           />
           <span className="text-xs text-muted-foreground min-w-[2rem]">{volume[0]}%</span>
         </div>
+
+        <ExportDialog>
+            <Button variant='secondary'>
+              Export
+            </Button>
+          </ExportDialog>
       </div>
     </div>
   );

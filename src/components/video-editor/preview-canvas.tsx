@@ -736,13 +736,13 @@ const PreviewCanvas: React.FC = () => {
         <div className="absolute bottom-6 left-6 bg-black/70 text-white text-xs px-2 py-1 rounded flex items-center gap-1 shadow-lg backdrop-blur-sm border">
           built with <Heart size={10}/> by 
           <a 
-            href="https://x.com/veyoog" 
+            href="https://x.com/_finkd" 
             target="_blank" 
             rel="noopener noreferrer"
             className="flex items-center gap-1 hover:opacity-80 transition-opacity"
           >
             <img 
-              src="https://pbs.twimg.com/profile_images/1720127463165186048/4JJ85Mb3_400x400.jpg" 
+              src="https://pbs.twimg.com/profile_images/1942942309626126337/wzUZxCQY_400x400.jpg" 
               alt="veyoog profile" 
               className="w-4 h-4 rounded-full inline-block align-middle"
             />
