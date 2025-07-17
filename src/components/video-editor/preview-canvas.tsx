@@ -5,7 +5,7 @@ import { useProjectStore } from '@/store/projectStore';
 import { createUUID } from '@/lib/uuid';
 import { useCanvasZIndexSync } from '@/hooks/useCanvasZIndexSync';
 import { useTimelineSync } from '@/hooks/useTimelineSync';
-import { Heart, ZoomIn, ZoomOut, Trash2, Twitter } from 'lucide-react';
+import { ZoomIn, ZoomOut, Trash2 } from 'lucide-react';
 
 const PreviewCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
