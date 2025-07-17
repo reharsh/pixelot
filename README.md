@@ -2,6 +2,9 @@
 
 Pixelot is a modern, interactive video editor that enables users to create, animate, and export videos with timeline-based editing, asset management, and advanced animation controls—all in the browser.
 
+<img width="1440" height="747" alt="Screenshot 2025-07-17 at 10 14 51 AM" src="https://github.com/user-attachments/assets/31cec616-ec09-4982-9f5b-67b8d2541cef" />
+
+
 ## Features
 
 - 🎬 Timeline-based video editing with drag-and-drop assets
@@ -26,10 +29,6 @@ npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) to view the app in your browser.
-
-## Screenshots
-
-![Landing Page](public/thumbnail.png)
 
 ## License
 
