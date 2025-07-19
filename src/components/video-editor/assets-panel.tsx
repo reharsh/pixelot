@@ -384,7 +384,7 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({
         {/* Assets Tabs */}
         <ScrollArea className="flex-1">
           <div className="p-4">
-            <Tabs defaultValue="media">
+            <Tabs defaultValue="shapes">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="media">Images</TabsTrigger>
                 <TabsTrigger value="shapes">Shapes</TabsTrigger>
